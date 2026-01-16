@@ -4,9 +4,9 @@ wandb disabled
 # wandb enabled
 # wandb online
 
-torchrun --nproc_per_node=1  classification/train.py \
+python -m torch.distributed.run --nproc_per_node=1  classification/train.py \
     --model 'resnet50' \
-    --batch-size 256 \
+    --batch-size 128 \
     --epochs 50 \
     --opt 'sgd' \
     --lr 0.2 \
