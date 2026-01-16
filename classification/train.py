@@ -15,6 +15,7 @@ from tiny_imagenet_dataset import TinyImageNet
 from torch import nn
 from torch.utils.data.dataloader import default_collate
 from torchvision.transforms.functional import InterpolationMode
+from resnet50_1_tinet import ResNet, Bottleneck
 
 
 def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, args, model_ema=None, scaler=None):
@@ -194,7 +195,7 @@ def main(args):
     )
 
     print("Creating model")
-    model = torchvision.models.get_model(args.model, weights=args.weights, num_classes=num_classes)
+    model = ResNet(Bottleneck, [3,4,6,3], num_classes=num_classes, custom_conv_layer_index=1)
     model.conv1 = nn.Conv2d(3,64, kernel_size=(3,3), stride=(1,1), padding=(1,1), bias=False)
     model.maxpool = nn.Identity()
     model.to(device)
