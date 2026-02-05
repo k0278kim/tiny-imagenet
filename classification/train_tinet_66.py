@@ -6,6 +6,7 @@ from torchvision import datasets, transforms
 from tqdm import tqdm
 import argparse
 import os
+from tiny_imagenet_dataset import TinyImageNet
 
 # 사용자 정의 모듈 (Tiny-ImageNet용 모델 구조로 임포트)
 from resnet50_1_tinet import ResNet, Bottleneck
