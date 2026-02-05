@@ -2,75 +2,80 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from torchvision import datasets, transforms # 추가
 from tqdm import tqdm
 import argparse
 import os
 
 # 사용자 정의 모듈 임포트
 from nets.resnet50_1_tinet import ResNet, Bottleneck
-from nets.early_stopping import EarlyStopping
-from tiny_imagenet_dataset import load_data  # 기존에 검증된 데이터 로더 필수 활용
+# from nets.early_stopping import EarlyStopping # 스크린샷 가이드(200회 완주)를 위해 사용 여부 선택
 
 # 1. 인자 설정
-parser = argparse.ArgumentParser(description='ResNet Model1 Training Optimization')
+parser = argparse.ArgumentParser(description='ResNet-50 CIFAR-10 Training (From Scratch)')
 parser.add_argument('--cusin', type=int, default=1, help='custom convolution layer index')
 args = parser.parse_args()
 
-# 2. 하이퍼파라미터 (기존 설정 유지)
+# 2. 하이퍼파라미터 (스크린샷 기준 업데이트)
 BATCH_SIZE = 128
-NUM_EPOCHS = 150
+NUM_EPOCHS = 200
 INITIAL_LR = 0.1
 WEIGHT_DECAY = 5e-4
 MOMENTUM = 0.9
-NUM_WORKERS = 6
-CUSTOM_CONV_LAYER_INDEX = args.cusin
+LABEL_SMOOTHING = 0.1
+NUM_WORKERS = 4
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"🚀 Using device: {device}")
 
-# 3. 데이터 로드 (tiny_imagenet_dataset.py의 load_data 활용)
-# ImageFolder의 구조적 한계를 극복하기 위해 기존에 사용하시던 로직을 호출합니다.
-train_dir = "../tiny-imagenet-200/train"
-val_dir = "../tiny-imagenet-200/val"
+# 3. 데이터 전처리 및 증강 (스크린샷 1번 항목 반영)
+stats = ((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616))
+transform_train = transforms.Compose([
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=stats[0], std=stats[1])
+])
 
-# 기존에 구현된 load_data는 Tiny ImageNet의 특수 구조(val_annotations.txt 등)를 처리합니다.
-train_dataset, val_dataset, _, _ = load_data(train_dir, val_dir, args)
+transform_test = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize(mean=stats[0], std=stats[1])
+])
 
-train_loader = DataLoader(
-    train_dataset, 
-    batch_size=BATCH_SIZE, 
-    shuffle=True, 
-    num_workers=NUM_WORKERS, 
-    pin_memory=True
-)
-val_loader = DataLoader(
-    val_dataset, 
-    batch_size=BATCH_SIZE, 
-    shuffle=False, 
-    num_workers=NUM_WORKERS, 
-    pin_memory=True
-)
+# CIFAR-10 데이터셋 로드
+train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform_train)
+val_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
 
-# 4. 모델 및 도구 설정
-model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=200, custom_conv_layer_index=CUSTOM_CONV_LAYER_INDEX).to(device)
+train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True)
+val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
 
-# 가중치 유실 방지를 위해 구조 변경이 필요한 경우 여기서 수행 (예: 3x3 conv1)
-# model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False).to(device)
+# 4. 모델 설정 (CIFAR-10 최적화)
+# num_classes를 10으로 변경
+model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=10, custom_conv_layer_index=args.cusin).to(device)
 
-criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+# [중요] CIFAR-10용 입력 레이어 수정 
+# 이미지 크기가 32x32이므로 첫 7x7 conv와 maxpool을 수정해야 정보 손실이 없습니다.
+model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+model.bn1 = nn.BatchNorm2d(64)
+model.maxpool = nn.Identity() # maxpool 제거 (Identity로 대체)
+model = model.to(device)
+
+# 5. 손실 함수 및 옵티마이저 (스크린샷 2, 5번 항목)
+criterion = nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING)
 optimizer = optim.SGD(model.parameters(), lr=INITIAL_LR, momentum=MOMENTUM, 
                       weight_decay=WEIGHT_DECAY, nesterov=True)
 
+# 6. 스케줄러 (스크린샷 4번 Option B 반영)
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=NUM_EPOCHS)
-early_stopping = EarlyStopping(patience=15, delta=0.001)
 scaler = torch.cuda.amp.GradScaler()
 
-# 5. 학습 루프
+# 7. 학습 루프
 best_acc = 0.0
 
 for epoch in range(NUM_EPOCHS):
     # --- [TRAIN PHASE] ---
     model.train()
+    train_loss = 0.0
     pbar = tqdm(train_loader, desc=f"Epoch [{epoch + 1}/{NUM_EPOCHS}]")
     
     for images, labels in pbar:
@@ -85,6 +90,7 @@ for epoch in range(NUM_EPOCHS):
         scaler.step(optimizer)
         scaler.update()
         
+        train_loss += loss.item()
         pbar.set_postfix({'loss': f"{loss.item():.4f}", 'lr': f"{optimizer.param_groups[0]['lr']:.5f}"})
 
     # --- [VALIDATION PHASE] ---
@@ -94,33 +100,28 @@ for epoch in range(NUM_EPOCHS):
     total = 0
 
     with torch.no_grad():
-        with torch.cuda.amp.autocast():
-            for images, labels in val_loader:
-                images, labels = images.to(device), labels.to(device)
+        for images, labels in val_loader:
+            images, labels = images.to(device), labels.to(device)
+            with torch.cuda.amp.autocast():
                 outputs = model(images)
                 loss = criterion(outputs, labels)
                 
-                val_loss += loss.item()
-                _, pred = torch.max(outputs, 1)
-                total += labels.size(0)
-                correct += (pred == labels).sum().item()
+            val_loss += loss.item()
+            _, pred = torch.max(outputs, 1)
+            total += labels.size(0)
+            correct += (pred == labels).sum().item()
     
     avg_val_loss = val_loss / len(val_loader)
     val_acc = 100 * correct / total
-    print(f"📊 결과: Val Loss = {avg_val_loss:.4f} | Val Acc = {val_acc:.2f}%")
+    print(f"📊 Result: Val Loss = {avg_val_loss:.4f} | Val Acc = {val_acc:.2f}%")
 
+    # 스케줄러 업데이트
     scheduler.step()
 
-    # 초기 학습 안정화를 위해 20에포크 이후부터 Early Stopping 적용
-    if epoch > 20:
-        early_stopping(avg_val_loss)
-        if early_stopping.early_stop:
-            print(f"⛔ Early stopping triggered at epoch {epoch+1}")
-            break
-
+    # 최고 정확도 저장
     if val_acc > best_acc:
         best_acc = val_acc
-        torch.save(model.state_dict(), f'best_model_cusin_{CUSTOM_CONV_LAYER_INDEX}.pth')
+        torch.save(model.state_dict(), f'best_resnet50_cifar10_cusin_{args.cusin}.pth')
         print(f"🌟 Best Model Saved! (Acc: {best_acc:.2f}%)")
 
-print(f"🏁 최고 정확도: {best_acc:.2f}%")
+print(f"🏁 Final Best Accuracy: {best_acc:.2f}%")
