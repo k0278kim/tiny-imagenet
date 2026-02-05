@@ -45,8 +45,8 @@ transform_val = transforms.Compose([
 ])
 
 # Tiny-ImageNet 데이터 로드 (ImageFolder 구조 가정)
-train_dataset = datasets.ImageFolder(os.path.join(args.data_dir, 'train'), transform=transform_train)
-val_dataset = datasets.ImageFolder(os.path.join(args.data_dir, 'val'), transform=transform_val)
+train_dataset = TinyImageNet('./data', split='train', download=True, transform=transform_train)
+val_dataset = TinyImageNet('./data', split='val', download=False, transform=transform_val)
 
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=NUM_WORKERS, pin_memory=True)
 val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False, num_workers=NUM_WORKERS, pin_memory=True)
