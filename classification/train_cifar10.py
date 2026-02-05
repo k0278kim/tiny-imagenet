@@ -8,7 +8,7 @@ import argparse
 import os
 
 # 사용자 정의 모듈 임포트
-from nets.resnet50_1_tinet import ResNet, Bottleneck
+from resnet50_1_tinet import ResNet, Bottleneck
 # from nets.early_stopping import EarlyStopping # 스크린샷 가이드(200회 완주)를 위해 사용 여부 선택
 
 # 1. 인자 설정
