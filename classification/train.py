@@ -196,8 +196,8 @@ def main(args):
 
     print("Creating model")
     model = ResNet(Bottleneck, [3,4,6,3], num_classes=num_classes, custom_conv_layer_index=1)
-    model.conv1 = nn.Conv2d(3,64, kernel_size=(3,3), stride=(1,1), padding=(1,1), bias=False)
-    model.maxpool = nn.Identity()
+    # model.conv1 = nn.Conv2d(3,64, kernel_size=(3,3), stride=(1,1), padding=(1,1), bias=False)
+    # model.maxpool = nn.Identity()
     model.to(device)
 
     if args.distributed and args.sync_bn:
