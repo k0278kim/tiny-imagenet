@@ -7,7 +7,7 @@ wandb disabled
 python -m torch.distributed.run --nproc_per_node=1  classification/train.py \
     --model 'resnet50' \
     --batch-size 128 \
-    --epochs 50 \
+    --epochs 100 \
     --opt 'sgd' \
     --lr 0.2 \
     --momentum 0.9 \
