@@ -55,9 +55,20 @@ model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=10, custom_conv_layer_index
 
 # [중요] CIFAR-10용 입력 레이어 수정 
 # 이미지 크기가 32x32이므로 첫 7x7 conv와 maxpool을 수정해야 정보 손실이 없습니다.
-model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+model.conv1 = nn.Conv2d(3, 64, kernel_size=(3,3), stride=(1,1), padding=(1,1), bias=False)
 model.bn1 = nn.Identity() # maxpool 제거 (Identity로 대체)
 model = model.to(device)
+
+checkpoint_path = f'best_cifar10_cusin_{args.cusin}.pth'
+
+if os.path.exists(checkpoint_path):
+    print(f"🔄 Loading checkpoint: {checkpoint_path}")
+    # map_location은 GPU/CPU 환경이 달라도 안전하게 로드하기 위해 사용합니다.
+    state_dict = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(state_dict)
+    print("✅ Weights loaded successfully. Resuming training...")
+else:
+    print("🆕 No checkpoint found. Starting from scratch.")
 
 # 5. 손실 함수 및 옵티마이저 (스크린샷 2, 5번 항목)
 criterion = nn.CrossEntropyLoss(label_smoothing=LABEL_SMOOTHING)
@@ -120,7 +131,7 @@ for epoch in range(NUM_EPOCHS):
     # 최고 정확도 저장
     if val_acc > best_acc:
         best_acc = val_acc
-        torch.save(model.state_dict(), f'best_resnet50_cifar10_cusin_{args.cusin}.pth')
+        torch.save(model.state_dict(), f'best_cifar10_cusin_{args.cusin}.pth')
         print(f"🌟 Best Model Saved! (Acc: {best_acc:.2f}%)")
 
 print(f"🏁 Final Best Accuracy: {best_acc:.2f}%")
