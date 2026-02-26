@@ -56,8 +56,7 @@ model = ResNet(Bottleneck, [3, 4, 6, 3], num_classes=10, custom_conv_layer_index
 # [중요] CIFAR-10용 입력 레이어 수정 
 # 이미지 크기가 32x32이므로 첫 7x7 conv와 maxpool을 수정해야 정보 손실이 없습니다.
 model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
-model.bn1 = nn.BatchNorm2d(64)
-# model.maxpool = nn.Identity() # maxpool 제거 (Identity로 대체)
+model.bn1 = nn.Identity() # maxpool 제거 (Identity로 대체)
 model = model.to(device)
 
 # 5. 손실 함수 및 옵티마이저 (스크린샷 2, 5번 항목)
